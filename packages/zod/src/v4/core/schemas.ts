@@ -1276,15 +1276,25 @@ export const $ZodCustomStringFormat: core.$constructor<$ZodCustomStringFormat> =
   (inst, def): void => {
     $ZodStringFormat.init(inst, def);
     inst._zod.check = (payload) => {
-      if (def.fn(payload.value)) return;
-
-      payload.issues.push({
-        code: "invalid_format",
-        format: def.format,
-        input: payload.value,
-        inst,
-        continue: !def.abort,
-      });
+      // A string-format predicate may be async (the public type allows
+      // `(input: string) => MaybeAsync<unknown>`). Checking the raw Promise
+      // makes it truthy so the predicate silently passes. Handle it the same
+      // way $ZodCustom does: return a Promise for the async parse pipeline,
+      // which makes sync parse throw $ZodAsyncError.
+      const result = def.fn(payload.value);
+      const fail = (value: unknown) => {
+        if (value) return;
+        payload.issues.push({
+          code: "invalid_format",
+          format: def.format,
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+      };
+      if (result instanceof Promise) return result.then(fail);
+      fail(result);
+      return;
     };
   }
 );

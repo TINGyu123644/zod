@@ -123,3 +123,23 @@ test("z.hex", () => {
   expect(hexSchema.safeParse("hello world").success).toBe(false);
   expect(hexSchema.safeParse("123-abc").success).toBe(false);
 });
+
+
+test("z.stringFormat with async predicate", async () => {
+  const asyncFalse = z.stringFormat("asyncFalse", async () => false);
+  const asyncTrue = z.stringFormat("asyncTrue", async () => true);
+
+  // Async predicates must be awaited by the async parse pipeline.
+  expect((await asyncFalse.safeParseAsync("bad")).success).toBe(false);
+  expect((await asyncTrue.safeParseAsync("ok")).success).toBe(true);
+
+  // A Promise returned from check must surface as $ZodAsyncError in sync parse.
+  expect(() => asyncFalse.safeParse("bad")).toThrow(z.$ZodAsyncError);
+
+  // Sync predicates keep working in both pipelines.
+  const syncFalse = z.stringFormat("syncFalse", () => false);
+  const syncTrue = z.stringFormat("syncTrue", () => true);
+  expect((await syncFalse.safeParseAsync("bad")).success).toBe(false);
+  expect(syncFalse.safeParse("bad").success).toBe(false);
+  expect(syncTrue.safeParse("ok").success).toBe(true);
+});
